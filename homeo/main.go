@@ -2,45 +2,70 @@ package main
 
 import (
 	"context"
-	"log"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"os"
 
-	"github.com/joho/godotenv"
+	"github.com/aws/aws-lambda-go/events"
+	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/line/line-bot-sdk-go/v7/linebot"
 	openai "github.com/sashabaranov/go-openai"
 )
 
-func main() {
-	if err := godotenv.Load(".env"); err != nil {
-		log.Printf("fail to load env file: %v", err)
+type Webhook struct {
+	Events []*linebot.Event `json:"events"`
+}
+
+func isSignatureValid(channelSecret, signature string, body []byte) bool {
+	decodedSignature, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		return false
 	}
 
+	hash := hmac.New(sha256.New, []byte(channelSecret))
+	_, err = hash.Write(body)
+	if err != nil {
+		return false
+	}
+
+	return hmac.Equal(decodedSignature, hash.Sum(nil))
+}
+
+func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	bot, err := linebot.New(
 		os.Getenv("LINE_CHANNEL_SECRET"),
 		os.Getenv("LINE_CHANNEL_TOKEN"),
 	)
 	if err != nil {
-		log.Printf("fail to init line bot: %v", err)
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusInternalServerError,
+		}, err
+	}
+
+	if isSignatureValid(os.Getenv("LINE_CHANNEL_SECRET"), request.Headers["X-Line-Signature"], []byte(request.Body)) {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusBadRequest,
+		}, nil
+	}
+
+	var webhook Webhook
+	if err := json.Unmarshal([]byte(request.Body), &webhook); err != nil {
+		return events.APIGatewayProxyResponse{
+			StatusCode: http.StatusBadRequest,
+		}, err
 	}
 
 	client := openai.NewClient(os.Getenv("OPENAI_API_KEY"))
 
-	http.HandleFunc("/callback", func(w http.ResponseWriter, req *http.Request) {
-		events, err := bot.ParseRequest(req)
-		if err != nil {
-			if err == linebot.ErrInvalidSignature {
-				w.WriteHeader(400)
-			} else {
-				w.WriteHeader(500)
-			}
-			return
-		}
-		for _, event := range events {
-			if event.Type == linebot.EventTypeMessage {
-				switch message := event.Message.(type) {
-				case *linebot.TextMessage:
-					req := openai.ChatCompletionRequest{
+	for _, event := range webhook.Events {
+		if event.Type == linebot.EventTypeMessage {
+			switch message := event.Message.(type) {
+			case *linebot.TextMessage:
+				if request.Path == "/chat" {
+					compReq := openai.ChatCompletionRequest{
 						Model: openai.GPT3Dot5Turbo,
 						Messages: []openai.ChatCompletionMessage{
 							{
@@ -64,21 +89,29 @@ func main() {
 
 					resp, err := client.CreateChatCompletion(
 						context.Background(),
-						req,
+						compReq,
 					)
 					if err != nil {
-						log.Printf("fail to get a response from OpenAI API: %v", err)
+						return events.APIGatewayProxyResponse{
+							StatusCode: http.StatusInternalServerError,
+						}, err
 					}
 
 					if _, err = bot.ReplyMessage(event.ReplyToken, linebot.NewTextMessage(resp.Choices[0].Message.Content)).Do(); err != nil {
-						log.Printf("fail to reply message from bot: %v", err)
+						return events.APIGatewayProxyResponse{
+							StatusCode: http.StatusInternalServerError,
+						}, err
 					}
 				}
 			}
 		}
-	})
-
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		log.Fatal(err)
 	}
+
+	return events.APIGatewayProxyResponse{
+		StatusCode: http.StatusOK,
+	}, nil
+}
+
+func main() {
+	lambda.Start(handler)
 }
