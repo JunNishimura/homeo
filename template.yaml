@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  This is a template for Homeo
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 5
+    MemorySize: 128
+
+Parameters:
+  LineChannelSecret:
+    Type: String
+  LineChannelToken:
+    Type: String
+  OpenAIAPIKey: 
+    Type: String
+
+Resources:
+  HomeoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: homeo/
+      Handler: homeo
+      Runtime: go1.x
+      Events:
+        Chat:
+          Type: Api
+          Properties:
+            Path: /chat
+            Method: POST
+      Environment:
+        Variables:
+          LINE_CHANNEL_SECRET: !Ref LineChannelSecret
+          LINE_CHANNEL_TOKEN: !Ref LineChannelToken
+          OPENAI_API_KEY: !Ref OpenAIAPIKey
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  HomeoAPI:
+    Description: "API Gateway endpoint URL for Prod environment for Homeo Function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/homeo/"
+  HomeoFunction:
+    Description: "homeo Function ARN"
+    Value: !GetAtt HomeoFunction.Arn
+  HomeoFunctionIamRole:
+    Description: "Implicit IAM Role created for Homeo function"
+    Value: !GetAtt HomeoFunctionRole.Arn

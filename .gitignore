@@ -20,5 +20,8 @@
 # Go workspace file
 go.work
 
+# AWS SAM build file
+.aws-sam
+
 # env file
 .env
