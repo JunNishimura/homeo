@@ -14,7 +14,7 @@ Parameters:
     Type: String
   LineChannelToken:
     Type: String
-  OpenAIKey: 
+  OpenAIAPIKey: 
     Type: String
 
 Resources:
@@ -34,7 +34,7 @@ Resources:
         Variables:
           LINE_CHANNEL_SECRET: !Ref LineChannelSecret
           LINE_CHANNEL_TOKEN: !Ref LineChannelToken
-          OPENAI_API_KEY: !Ref OpenAIKey
+          OPENAI_API_KEY: !Ref OpenAIAPIKey
 
 Outputs:
   # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
