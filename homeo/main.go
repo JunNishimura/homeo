@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
 
@@ -46,6 +47,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 	}
 
 	if isSignatureValid(os.Getenv("LINE_CHANNEL_SECRET"), request.Headers["X-Line-Signature"], []byte(request.Body)) {
+		log.Println("signature is not valid")
 		return events.APIGatewayProxyResponse{
 			StatusCode: http.StatusBadRequest,
 		}, nil
@@ -53,6 +55,7 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	var webhook Webhook
 	if err := json.Unmarshal([]byte(request.Body), &webhook); err != nil {
+		log.Println("json unmarshal error")
 		return events.APIGatewayProxyResponse{
 			StatusCode: http.StatusBadRequest,
 		}, err
