@@ -1,0 +1,6 @@
+version: 2
+updates:
+  - directory: /homeo/
+    package-ecosystem: "gomod"
+    schedule:
+      interval: "weekly"
